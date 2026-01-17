@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Ventas | Entre Cajas Academy</title>
+    <!-- Tailwind CSS para el diseño -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js para las gráficas -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- PapaParse para procesar CSV con precisión -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0a0a;
+            color: #ffffff;
+            scroll-behavior: smooth;
+        }
+
+        .primary-orange { color: #f2911e; }
+        .bg-primary-orange { background-color: #f2911e; }
+        .border-primary-orange { border-color: #f2911e; }
+        
+        .glass-card {
+            background: rgba(18, 18, 18, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .hero-gradient {
+            background: linear-gradient(135deg, #f2911e 0%, #6d3e09 100%);
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #f2911e;
+            border-radius: 10px;
+        }
+
+        /* Chart Canvas Size */
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="custom-scrollbar">
+
+    <!-- Pantalla de Carga/Subida -->
+    <div id="upload-screen" class="min-h-screen flex flex-col items-center justify-center p-6">
+        <div class="max-w-xl w-full text-center animate-fade-in">
+            <div class="w-24 h-24 rounded-full bg-primary-orange flex items-center justify-center mx-auto mb-10 relative shadow-[0_0_50px_rgba(242,145,30,0.3)]">
+                <i data-lucide="zap" class="w-12 h-12 text-black fill-current"></i>
+            </div>
+            <h1 class="text-5xl font-black mb-4 tracking-tighter uppercase italic leading-none">
+                Reporte de Ventas <br><span class="primary-orange text-6xl">Entre Cajas Academy</span>
+            </h1>
+            <p class="text-zinc-500 mb-12 text-lg">Carga tus reportes CSV para visualizar el rendimiento estratégico.</p>
+
+            <div id="drop-zone" class="relative block w-full p-20 border-2 border-dashed border-zinc-800 bg-zinc-900/30 rounded-[3.5rem] transition-all cursor-pointer hover:border-zinc-700">
+                <input type="file" id="file-input" multiple class="hidden" accept=".csv">
+                <div class="flex flex-col items-center gap-6">
+                    <div class="w-16 h-16 bg-zinc-800 rounded-2xl flex items-center justify-center">
+                        <i data-lucide="upload" class="w-8 h-8 text-zinc-500" id="upload-icon"></i>
+                    </div>
+                    <div class="space-y-2">
+                        <span class="block font-black text-xl text-zinc-200 uppercase tracking-tighter italic">Cargar Reportes CSV</span>
+                        <span class="block text-xs text-zinc-600 uppercase tracking-[0.3em] font-bold">Informe Macro + Compradores</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Principal (Oculto inicialmente) -->
+    <div id="dashboard" class="hidden">
+        <!-- Navegación -->
+        <nav class="fixed top-0 w-full z-50 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/5 px-8 py-5">
+            <div class="max-w-[1600px] mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-4 cursor-pointer" onclick="location.reload()">
+                    <div class="w-10 h-10 bg-primary-orange rounded-xl flex items-center justify-center">
+                        <i data-lucide="zap" class="w-6 h-6 text-black fill-current"></i>
+                    </div>
+                    <div class="hidden sm:block">
+                        <p class="font-black text-lg tracking-tighter uppercase italic leading-none">Entre Cajas</p>
+                        <p class="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Intelligence Dashboard</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div id="webinar-selector" class="flex bg-zinc-900 rounded-full p-1 border border-zinc-800">
+                        <!-- Botones de Webinar dinámicos -->
+                    </div>
+                    <button onclick="location.reload()" class="p-2 text-zinc-500 hover:text-red-500">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="pt-32 pb-32 px-8 max-w-[1600px] mx-auto">
+            <!-- Hero Banner -->
+            <header class="mb-12 animate-fade-in">
+                <div class="w-full h-80 rounded-[3.5rem] hero-gradient p-12 flex flex-col justify-end relative overflow-hidden shadow-2xl">
+                    <div class="absolute top-0 right-0 w-[600px] h-[600px] bg-white/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
+                    <div class="bg-black/20 backdrop-blur-md px-5 py-2 rounded-full text-[12px] font-black uppercase tracking-[0.4em] mb-6 w-fit border border-white/10">
+                        Métricas de Impacto • <span id="current-webinar-name">Webinar</span>
+                    </div>
+                    <h1 class="text-6xl md:text-8xl font-black italic uppercase leading-[0.75] tracking-tighter">
+                        Resultados <br><span class="text-white/30 italic">Academy</span>
+                    </h1>
+                </div>
+            </header>
+
+            <!-- Grid de Métricas -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                <div class="glass-card p-8 rounded-[2.5rem] hover:border-primary-orange/40 transition-all group">
+                    <i data-lucide="dollar-sign" class="w-6 h-6 primary-orange mb-6"></i>
+                    <p class="text-zinc-500 text-xs font-black uppercase tracking-widest mb-1">Ingresos Brutos</p>
+                    <p id="stat-ingresos" class="text-4xl font-black text-white">$0</p>
+                </div>
+                <div class="glass-card p-8 rounded-[2.5rem] hover:border-primary-orange/40 transition-all group">
+                    <i data-lucide="users" class="w-6 h-6 text-blue-400 mb-6"></i>
+                    <p class="text-zinc-500 text-xs font-black uppercase tracking-widest mb-1">Ventas Totales</p>
+                    <p id="stat-ventas" class="text-4xl font-black text-white">0</p>
+                </div>
+                <div class="glass-card p-8 rounded-[2.5rem] hover:border-primary-orange/40 transition-all group">
+                    <i data-lucide="target" class="w-6 h-6 text-purple-400 mb-6"></i>
+                    <p class="text-zinc-500 text-xs font-black uppercase tracking-widest mb-1">Inversión Ads</p>
+                    <p id="stat-gasto" class="text-4xl font-black text-white">$0</p>
+                </div>
+                <div class="glass-card p-8 rounded-[2.5rem] hover:border-primary-orange/40 transition-all group">
+                    <i data-lucide="trending-up" class="w-6 h-6 text-yellow-400 mb-6"></i>
+                    <p class="text-zinc-500 text-xs font-black uppercase tracking-widest mb-1">ROAS Global</p>
+                    <p id="stat-roas" class="text-4xl font-black text-white">0x</p>
+                </div>
+            </div>
+
+            <!-- Gráficas Principales -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+                <div class="lg:col-span-2 glass-card rounded-[3rem] p-10">
+                    <h3 class="text-2xl font-black uppercase italic mb-10">Rendimiento por Fuente</h3>
+                    <div class="chart-container">
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass-card rounded-[3rem] p-10 flex flex-col">
+                    <h3 class="text-2xl font-black uppercase italic mb-8">Distribución</h3>
+                    <div class="chart-container flex-1">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ranking Table -->
+            <div class="glass-card rounded-[3rem] p-10 mb-12">
+                <h3 class="text-2xl font-black uppercase italic mb-8">Ranking de Canales</h3>
+                <div id="ranking-list" class="space-y-4">
+                    <!-- Filas dinámicas -->
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <footer class="mt-24 border-t border-zinc-800 pt-16 flex flex-col items-center">
+                <div class="w-16 h-16 bg-primary-orange rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl shadow-primary-orange/20">
+                    <i data-lucide="zap" class="text-black w-8 h-8 fill-current"></i>
+                </div>
+                <h2 class="text-4xl font-black uppercase italic mb-4 text-center">Entre Cajas Academy Intelligence</h2>
+                <p class="text-zinc-500 text-sm max-w-lg text-center leading-relaxed">
+                    Visualización avanzada de resultados semanales para optimización de ventas y escalabilidad.
+                </p>
+                <p class="mt-16 text-zinc-700 text-[10px] font-bold uppercase tracking-[0.5em]">© 2026 Entre Cajas Academy</p>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        // --- Estado de la App ---
+        let appData = [];
+        let currentWebinarIndex = 0;
+        let mainChart = null;
+        let pieChart = null;
+
+        // --- Inicialización ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            setupFileUpload();
+        });
+
+        function setupFileUpload() {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+
+            dropZone.onclick = () => fileInput.click();
+
+            dropZone.ondragover = (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-primary-orange', 'bg-primary-orange/10');
+            };
+
+            dropZone.ondragleave = () => {
+                dropZone.classList.remove('border-primary-orange', 'bg-primary-orange/10');
+            };
+
+            dropZone.ondrop = (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-primary-orange', 'bg-primary-orange/10');
+                handleFiles(e.dataTransfer.files);
+            };
+
+            fileInput.onchange = (e) => handleFiles(e.target.files);
+        }
+
+        async function handleFiles(files) {
+            const filesArray = Array.from(files);
+            if (filesArray.length === 0) return;
+
+            document.getElementById('upload-icon').parentElement.innerHTML = '<div class="animate-spin w-8 h-8 border-4 border-[#f2911e] border-t-transparent rounded-full"></div>';
+
+            for (const file of filesArray) {
+                const text = await file.text();
+                if (text.includes("WEBINAR")) {
+                    parseMacroCSV(text);
+                }
+            }
+
+            if (appData.length > 0) {
+                showDashboard();
+            } else {
+                alert("No se detectaron datos válidos de Webinar en el archivo.");
+                location.reload();
+            }
+        }
+
+        function parseMacroCSV(text) {
+            const results = Papa.parse(text, { skipEmptyLines: true }).data;
+            let currentWebinar = null;
+
+            results.forEach(row => {
+                const rowStr = row.join(" ").toUpperCase();
+                
+                if (rowStr.includes("WEBINAR")) {
+                    if (currentWebinar) appData.push(currentWebinar);
+                    currentWebinar = { 
+                        id: row.find(c => c.toUpperCase().includes("WEBINAR")), 
+                        fuentes: [], 
+                        total: {} 
+                    };
+                } else if (currentWebinar && row[1] === "TOTAL") {
+                    currentWebinar.total = {
+                        gasto: parseFloat(row[2]) || 0,
+                        ventas: parseInt(row[3]) || 0,
+                        ingresos: parseFloat(row[4]) || 0,
+                        roas: row[5] ? row[5].replace(',', '.') : "0"
+                    };
+                } else if (currentWebinar && row[1] && row[1] !== "" && row[1] !== "Fuente" && !rowStr.includes("TOTAL")) {
+                    currentWebinar.fuentes.push({
+                        name: row[1],
+                        gasto: parseFloat(row[2]) || 0,
+                        ventas: parseInt(row[3]) || 0,
+                        ingresos: parseFloat(row[4]) || 0
+                    });
+                }
+            });
+            if (currentWebinar) appData.push(currentWebinar);
+        }
+
+        function showDashboard() {
+            document.getElementById('upload-screen').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            
+            renderSelectors();
+            updateDashboard();
+        }
+
+        function renderSelectors() {
+            const container = document.getElementById('webinar-selector');
+            container.innerHTML = '';
+            appData.forEach((web, idx) => {
+                const btn = document.createElement('button');
+                btn.className = `px-6 py-2 rounded-full text-[10px] font-black uppercase transition-all tracking-widest ${idx === currentWebinarIndex ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`;
+                btn.innerText = web.id;
+                btn.onclick = () => {
+                    currentWebinarIndex = idx;
+                    renderSelectors();
+                    updateDashboard();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function updateDashboard() {
+            const webinar = appData[currentWebinarIndex];
+            
+            // Textos
+            document.getElementById('current-webinar-name').innerText = webinar.id;
+            document.getElementById('stat-ingresos').innerText = `$${webinar.total.ingresos.toLocaleString()}`;
+            document.getElementById('stat-ventas').innerText = webinar.total.ventas;
+            document.getElementById('stat-gasto').innerText = `$${webinar.total.gasto.toLocaleString()}`;
+            document.getElementById('stat-roas').innerText = `${webinar.total.roas}x`;
+
+            // Tabla Ranking
+            const rankingList = document.getElementById('ranking-list');
+            rankingList.innerHTML = '';
+            const sortedFuentes = [...webinar.fuentes].sort((a,b) => b.ingresos - a.ingresos);
+            
+            sortedFuentes.forEach((f, i) => {
+                const row = document.createElement('div');
+                row.className = "flex items-center gap-6 p-6 glass-card rounded-3xl hover:bg-zinc-800/50 transition cursor-default";
+                row.innerHTML = `
+                    <span class="text-3xl font-black italic text-zinc-800 w-8">${i+1}</span>
+                    <div class="flex-1">
+                        <p class="font-bold text-sm uppercase tracking-tight text-zinc-200">${f.name}</p>
+                        <div class="w-full bg-zinc-900 h-1.5 rounded-full mt-2">
+                            <div class="h-full bg-primary-orange transition-all duration-1000" style="width: ${(f.ingresos/webinar.total.ingresos*100)}%"></div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xl font-black text-white">$${(f.ingresos/1000).toFixed(1)}k</p>
+                        <p class="text-[10px] text-zinc-600 font-bold uppercase italic">${f.ventas} ventas</p>
+                    </div>
+                `;
+                rankingList.appendChild(row);
+            });
+
+            // Gráficas
+            updateCharts(webinar);
+        }
+
+        function updateCharts(webinar) {
+            const labels = webinar.fuentes.map(f => f.name);
+            const ingresos = webinar.fuentes.map(f => f.ingresos);
+            const ventas = webinar.fuentes.map(f => f.ventas);
+
+            // Destruir previas
+            if (mainChart) mainChart.destroy();
+            if (pieChart) pieChart.destroy();
+
+            // Main Bar Chart
+            const ctxMain = document.getElementById('mainChart').getContext('2d');
+            mainChart = new Chart(ctxMain, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Ingresos',
+                        data: ingresos,
+                        backgroundColor: webinar.fuentes.map((_, i) => i === 0 ? '#f2911e' : '#27272a'),
+                        borderRadius: 10,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#52525b', font: { size: 10, weight: '900' } }
+                        }
+                    }
+                }
+            });
+
+            // Pie Chart
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            pieChart = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: ventas,
+                        backgroundColor: ['#f2911e', '#ffaf4d', '#ffffff', '#535353', '#b3b3b3'],
+                        borderWidth: 0,
+                        hoverOffset: 20
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom',
+                            labels: { color: '#52525b', padding: 20, font: { size: 10, weight: 'bold' } }
+                        } 
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
